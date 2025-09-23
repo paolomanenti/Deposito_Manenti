@@ -1,0 +1,11 @@
+analyst_task:
+  description: >
+    Review the question you got and write an answer.
+    Make sure the answer is detailed and contains any and all relevant information.
+  expected_output: >
+    A fully fledged answer.
+    Formatted as markdown without '```'
+  agent: analyst
+  output_file: output/answer.md
+
+

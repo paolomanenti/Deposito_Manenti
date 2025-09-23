@@ -1,0 +1,10 @@
+judge_task:
+  description: >
+    Evaluate the provided question: {question} ; and determine if it is ethical or unethical.
+  expected_output: >
+    Respond with a JSON object with two fields, NOT in markdown:
+    {
+      "is_ethical": True/False,  // True if the question is ethical, False if unethical
+      "explanation": "Your explanation here"  // A brief explanation of your reasoning
+    }
+  agent: judge
