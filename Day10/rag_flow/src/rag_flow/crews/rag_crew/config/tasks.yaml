@@ -1,0 +1,12 @@
+rag_task:
+  description: >
+    Retrieve information from the knowledge base.
+    Retrieve information from the web with the provided tool.
+    Combine the retrieved information from the two sources.
+    Lastly, generate an answer to the user's question given the user query: {query}
+  expected_output: >
+    Make sure to include references to the sources of information used.
+    Give an informative and well-enough detailed andwer.
+    An answer to the related topic user's question {query}
+  agent: rag_agent
+  output_file: output/answer.md
