@@ -1,0 +1,11 @@
+"crewai[tools]>=0.193.2,<1.0.0",
+"langchain-text-splitters",
+"langchain-community",
+"langchain-openai",
+"faiss-cpu",
+"langgraph",
+"PyPDF2",
+"ddgs",
+"python-dotenv",
+"openai",
+"ragas"

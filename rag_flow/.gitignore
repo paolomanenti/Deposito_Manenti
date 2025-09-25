@@ -1,0 +1,5 @@
+src/rag_flow/data
+.env
+.venv
+faiss_index
+output
