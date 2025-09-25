@@ -1,22 +1,25 @@
 from typing import List
 from ragas import EvaluationDataset, evaluate
-from rag_system import (Settings,
-                        get_contexts_for_question,
-                        get_embeddings,
-                        load_documents_from_folder,
-                        load_or_build_vectorstore,
-                        make_retriever,
-                        get_llm)
+from rag_system import (
+    Settings,
+    get_contexts_for_question,
+    get_embeddings,
+    load_documents_from_folder,
+    load_or_build_vectorstore,
+    make_retriever,
+    get_llm,
+)
 
-from ragas.metrics import answer_correctness  # usa questa solo se hai ground_truth
-from ragas.metrics import AnswerRelevancy  # pertinenza della risposta vs domanda
-from ragas.metrics import context_precision  # "precision@k" sui chunk recuperati
-from ragas.metrics import context_recall  # copertura dei chunk rilevanti
-from ragas.metrics import faithfulness  # ancoraggio della risposta al contesto
+from ragas.metrics import answer_correctness  # use only if you have ground_truth
+from ragas.metrics import AnswerRelevancy  # answer relevancy vs question
+from ragas.metrics import context_precision  # "precision@k" on retrieved chunks
+from ragas.metrics import context_recall  # coverage of relevant chunks
+from ragas.metrics import faithfulness  # answer grounded in context
 
 from src.rag_flow.main import RagAgentFlow
 
 SETTINGS = Settings()
+
 
 def build_ragas_dataset(
     questions: List[str],
@@ -26,8 +29,20 @@ def build_ragas_dataset(
     ground_truth: dict[str, str] | None = None,
 ):
     """
-    Esegue la pipeline RAG per ogni domanda e costruisce il dataset per Ragas.
-    Ogni riga contiene: question, contexts, answer, (opzionale) ground_truth.
+    Build a dataset for Ragas evaluation by running the RAG pipeline for each question.
+
+    Each row contains: question, retrieved contexts, answer, and optionally ground truth.
+
+    :param questions: List of user questions to evaluate.
+    :type questions: List[str]
+    :param retriever: Retriever object to fetch relevant contexts.
+    :param agent_flow: RagAgentFlow instance to generate answers.
+    :param k: Number of top contexts to retrieve.
+    :type k: int
+    :param ground_truth: Optional dictionary mapping questions to reference answers.
+    :type ground_truth: dict[str, str] or None
+    :return: List of dictionaries, each representing a Ragas evaluation row.
+    :rtype: list[dict]
     """
     dataset = []
     for q in questions:
@@ -36,7 +51,7 @@ def build_ragas_dataset(
         answer = agent_flow.kickoff()
 
         row = {
-            # chiavi richieste da molte metriche Ragas
+            # keys required by many Ragas metrics
             "user_input": q,
             "retrieved_contexts": contexts,
             "response": agent_flow.state.answer,
@@ -47,9 +62,20 @@ def build_ragas_dataset(
         dataset.append(row)
     return dataset
 
+
 def evaluate_rag(settings: Settings, questions: List[str]) -> EvaluationDataset:
     """
-    Esegue la pipeline RAG e valuta con Ragas.
+    Run the RAG pipeline and evaluate the results using Ragas metrics.
+
+    This function builds the RAG dataset, selects appropriate metrics, and performs
+    evaluation using the provided LLM and embeddings.
+
+    :param settings: Settings object containing configuration for the RAG system.
+    :type settings: Settings
+    :param questions: List of user questions to evaluate.
+    :type questions: List[str]
+    :return: Pandas DataFrame with evaluation results.
+    :rtype: pandas.DataFrame
     """
     embeddings = get_embeddings(settings)
     docs = load_documents_from_folder("src/rag_flow/data")
@@ -65,54 +91,60 @@ def evaluate_rag(settings: Settings, questions: List[str]) -> EvaluationDataset:
         questions[3]: "La monarchia fu abolita il 21 settembre 1792 e il giorno seguente fu proclamata la Repubblica; Luigi XVI venne giustiziato il 21 gennaio 1793: cadde l’Ancien Régime."
     }
 
-
-
-    # Costruisci dataset per Ragas (stessi top-k del tuo retriever)
+    # Build dataset for Ragas (same top-k as your retriever)
     dataset = build_ragas_dataset(
         questions=questions,
         retriever=retriever,
         agent_flow=agent_flow,
         k=settings.k,
-        ground_truth=ground_truth,  # rimuovi se non vuoi correctness
+        ground_truth=ground_truth,  # remove if you do not want correctness
     )
 
     evaluation_dataset = EvaluationDataset.from_list(dataset)
 
-    # Scegli le metriche: answer_relevancy, faithfulness, context_recall, context_precision
+    # Select metrics: answer_relevancy, faithfulness, context_recall, context_precision
     answer_relevancy = AnswerRelevancy(strictness=1)
     metrics = [answer_relevancy, faithfulness, context_recall, context_precision]
-    # Aggiungi correctness solo se tutte le righe hanno ground_truth
+    # Add correctness only if all rows have ground_truth
     if all("ground_truth" in row for row in dataset):
         metrics.append(answer_correctness)
 
-    # Esegui la valutazione con il TUO LLM e le TUE embeddings
+    # Run evaluation with your LLM and embeddings
     ragas_result = evaluate(
         dataset=evaluation_dataset,
         metrics=metrics,
-        llm=llm,  # passa l'istanza LangChain del tuo LLM
-        embeddings=embeddings,  # passa l'istanza LangChain delle tue embeddings
+        llm=llm,  # pass your LangChain LLM instance
+        embeddings=embeddings,  # pass your LangChain embeddings instance
     )
 
     df = ragas_result.to_pandas()
     cols = ["user_input", "response", "faithfulness", "answer_relevancy", "context_recall", "context_precision"]
-    print("\n=== DETTAGLIO PER ESEMPIO ===")
+    print("\n=== EXAMPLE DETAILS ===")
     print(df[cols].round(4).to_string(index=False))
 
     df.to_csv("./ragas_results.csv", index=False)
-    print("Salvato: ragas_results.csv")
+    print("Saved: ragas_results.csv")
     return df
 
+
 def main():
+    """
+    Main entry point for RAG evaluation.
+
+    Defines the questions, runs the evaluation, and prints the results.
+    """
     settings = SETTINGS
 
-    questions = ["Quando fu adottato il calendario rivoluzionario e come erano chiamati i mesi?",
-                 "Chi era Robespierre e quale ruolo ebbe nel Terrore?",
-                 "Quali furono le cause principali della Rivoluzione Francese?",
-                 "Quali furono le conseguenze della Rivoluzione Francese per la monarchia?"
-                 ]
+    questions = [
+        "Quando fu adottato il calendario rivoluzionario e come erano chiamati i mesi?",
+        "Chi era Robespierre e quale ruolo ebbe nel Terrore?",
+        "Quali furono le cause principali della Rivoluzione Francese?",
+        "Quali furono le conseguenze della Rivoluzione Francese per la monarchia?"
+    ]
     # Ragas
     df = evaluate_rag(settings, questions)
-    print(df[['faithfulness', 'answer_relevancy', 'context_recall', 'context_precision']].round(4).to_string(index=False))    
+    print(df[['faithfulness', 'answer_relevancy', 'context_recall', 'context_precision']].round(4).to_string(index=False))
+
 
 if __name__ == "__main__":
     main()
