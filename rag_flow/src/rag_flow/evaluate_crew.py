@@ -1,13 +1,17 @@
 from typing import List
 from ragas import EvaluationDataset, evaluate
-from rag_system import (
+from langchain_qdrant import QdrantVectorStore
+from langchain_openai import AzureOpenAIEmbeddings
+from qdrant_client import QdrantClient
+
+from utils_qdrant import (
     Settings,
-    get_contexts_for_question,
     get_embeddings,
-    load_documents_from_folder,
-    load_or_build_vectorstore,
-    make_retriever,
-    get_llm,
+    get_qdrant_client,
+    recreate_collection_for_rag,
+    hybrid_search,
+    format_docs_for_ragas,
+    get_llm
 )
 
 from ragas.metrics import answer_correctness  # use only if you have ground_truth
@@ -18,14 +22,26 @@ from ragas.metrics import faithfulness  # answer grounded in context
 
 from main import RagAgentFlow
 
+
+def qdrant_make_retrievr(
+        embeddings: AzureOpenAIEmbeddings,
+        settings: Settings
+    ):
+    retriever = QdrantVectorStore.from_existing_collection(
+    embedding=embeddings,
+    collection_name=settings.collection,
+    url=settings.qdrant_url,
+)
+    return retriever
+
 SETTINGS = Settings()
 
 
 def build_ragas_dataset(
+    client: QdrantClient,
+    embeddings: AzureOpenAIEmbeddings,
     questions: List[str],
-    retriever,
     agent_flow,
-    k: int,
     ground_truth: dict[str, str] | None = None,
 ):
     """
@@ -44,11 +60,13 @@ def build_ragas_dataset(
     :return: List of dictionaries, each representing a Ragas evaluation row.
     :rtype: list[dict]
     """
+
     dataset = []
     for q in questions:
-        contexts = get_contexts_for_question(retriever, q, k)
+        hits = hybrid_search(client, SETTINGS, q, embeddings)
+        contexts = format_docs_for_ragas(hits)
         agent_flow.input_query = q
-        answer = agent_flow.kickoff()
+        agent_flow.kickoff()
 
         row = {
             # keys required by many Ragas metrics
@@ -78,9 +96,9 @@ def evaluate_rag(settings: Settings, questions: List[str]) -> EvaluationDataset:
     :rtype: pandas.DataFrame
     """
     embeddings = get_embeddings(settings)
-    docs = load_documents_from_folder("src/rag_flow/data")
-    vector_store = load_or_build_vectorstore(settings, embeddings, docs)
-    retriever = make_retriever(vector_store, settings)
+    client = get_qdrant_client(settings)
+    vector_size = len(embeddings.embed_query("test"))
+    recreate_collection_for_rag(client, settings, vector_size)
     llm = get_llm(settings)
     agent_flow = RagAgentFlow()
 
@@ -93,13 +111,13 @@ def evaluate_rag(settings: Settings, questions: List[str]) -> EvaluationDataset:
 
     # Build dataset for Ragas (same top-k as your retriever)
     dataset = build_ragas_dataset(
+        client=client,
+        embeddings=embeddings,
         questions=questions,
-        retriever=retriever,
         agent_flow=agent_flow,
-        k=settings.k,
         ground_truth=ground_truth,  # remove if you do not want correctness
     )
-
+    
     evaluation_dataset = EvaluationDataset.from_list(dataset)
 
     # Select metrics: answer_relevancy, faithfulness, context_recall, context_precision

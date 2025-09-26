@@ -3,15 +3,18 @@ from typing import Type
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from rag_flow.rag_system import (
+from rag_flow.utils_qdrant import (
     SETTINGS,
     get_embeddings,
-    make_retriever,
     load_documents_from_folder,
-    load_or_build_vectorstore,
-    get_contexts_for_question,
-    make_retriever,
+    split_documents,
+    get_qdrant_client,
+    recreate_collection_for_rag,
+    upsert_chunks,
+    hybrid_search,
+    format_docs_for_prompt
 )
+
 
 class FetchContextsInput(BaseModel):
     """
@@ -60,7 +63,11 @@ class FetchContextsOutput(BaseTool):
         """
         embeddings = get_embeddings(SETTINGS)
         docs = load_documents_from_folder("src/rag_flow/data")
-        vector_store = load_or_build_vectorstore(SETTINGS, embeddings, docs)
-        retriever = make_retriever(vector_store=vector_store, settings=SETTINGS)
-        contexts = get_contexts_for_question(retriever, query, SETTINGS.k)
-        return "\n\n".join(contexts)
+        chunks = split_documents(docs, SETTINGS)
+        client = get_qdrant_client(SETTINGS)
+        vector_size = len(embeddings.embed_query("test"))
+        recreate_collection_for_rag(client, SETTINGS, vector_size)
+        upsert_chunks(client, SETTINGS, chunks, embeddings)
+        hits = hybrid_search(client, SETTINGS, query, embeddings)
+        contexts = format_docs_for_prompt(hits)
+        return contexts

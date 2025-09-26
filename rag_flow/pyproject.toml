@@ -15,7 +15,9 @@ dependencies = [
     "ddgs",
     "python-dotenv",
     "openai",
-    "ragas"
+    "ragas",
+    "qdrant-client",
+    "langchain-qdrant"
 ]
 
 
