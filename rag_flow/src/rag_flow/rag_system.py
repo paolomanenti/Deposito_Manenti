@@ -40,7 +40,8 @@ load_dotenv()
 
 @dataclass
 class Settings:
-    """Configuration container for the RAG pipeline.
+    """
+    Configuration container for the RAG pipeline.
 
     Attributes
     ----------
@@ -102,7 +103,8 @@ SETTINGS = Settings()
 
 
 def get_embeddings(settings: Settings) -> AzureOpenAIEmbeddings:
-    """Create an Azure OpenAI embeddings client.
+    """
+    Create an Azure OpenAI embeddings client.
 
     Parameters
     ----------
@@ -122,7 +124,8 @@ def get_embeddings(settings: Settings) -> AzureOpenAIEmbeddings:
     )
 
 def get_llm(settings: Settings):
-    """Initialize a chat LLM bound to Azure OpenAI.
+    """
+    Initialize a chat LLM bound to Azure OpenAI.
 
     Parameters
     ----------
@@ -161,7 +164,8 @@ def get_llm(settings: Settings):
     )
 
 def load_documents_from_folder(folder_path: str) -> List[Document]:
-    """Load text and PDF files within a folder as LangChain documents.
+    """
+    Load text and PDF files within a folder as LangChain documents.
 
     Parameters
     ----------
@@ -170,7 +174,7 @@ def load_documents_from_folder(folder_path: str) -> List[Document]:
 
     Returns
     -------
-    list[Document]
+    List[Document]
         Documents with `page_content` and `source` metadata.
     """
     docs = []
@@ -193,18 +197,19 @@ def load_documents_from_folder(folder_path: str) -> List[Document]:
     return docs
 
 def split_documents(docs: List[Document], settings: Settings) -> List[Document]:
-    """Split documents into overlapping chunks for retrieval.
+    """
+    Split documents into overlapping chunks for retrieval.
 
     Parameters
     ----------
-    docs : list[Document]
+    docs : List[Document]
         Input documents to split.
     settings : Settings
         Chunking configuration.
 
     Returns
     -------
-    list[Document]
+    List[Document]
         Chunked documents suitable for vector indexing.
     """
     splitter = RecursiveCharacterTextSplitter(
@@ -228,11 +233,12 @@ def split_documents(docs: List[Document], settings: Settings) -> List[Document]:
 def build_faiss_vectorstore(
     chunks: List[Document], embeddings: AzureOpenAIEmbeddings, persist_dir: str
 ) -> FAISS:
-    """Build a FAISS vector store from chunks and persist it to disk.
+    """
+    Build a FAISS vector store from chunks and persist it to disk.
 
     Parameters
     ----------
-    chunks : list[Document]
+    chunks : List[Document]
         Pre-split documents.
     embeddings : AzureOpenAIEmbeddings
         Embedding function for vectorization.
@@ -254,7 +260,8 @@ def build_faiss_vectorstore(
 def load_or_build_vectorstore(
     settings: Settings, embeddings: AzureOpenAIEmbeddings, docs: List[Document]
 ) -> FAISS:
-    """Load a persisted FAISS index or build it from documents.
+    """
+    Load a persisted FAISS index or build it from documents.
 
     Parameters
     ----------
@@ -262,7 +269,7 @@ def load_or_build_vectorstore(
         Global configuration (controls persist directory).
     embeddings : AzureOpenAIEmbeddings
         Embedding function used by the vector store.
-    docs : list[Document]
+    docs : List[Document]
         Source documents to index if no persisted index is found.
 
     Returns
@@ -284,7 +291,8 @@ def load_or_build_vectorstore(
     return build_faiss_vectorstore(chunks, embeddings, settings.persist_dir)
 
 def make_retriever(vector_store: FAISS, settings: Settings):
-    """Create a retriever from the vector store.
+    """
+    Create a retriever from the vector store.
 
     Parameters
     ----------
@@ -314,11 +322,12 @@ def make_retriever(vector_store: FAISS, settings: Settings):
         )
 
 def format_docs_for_prompt(docs: List[Document]) -> str:
-    """Format retrieved documents into a prompt-ready string with sources.
+    """
+    Format retrieved documents into a prompt-ready string with sources.
 
     Parameters
     ----------
-    docs : list[Document]
+    docs : List[Document]
         Documents to be rendered into the context block.
 
     Returns
@@ -333,18 +342,19 @@ def format_docs_for_prompt(docs: List[Document]) -> str:
     return "\n\n".join(lines)
 
 def ddgs_search(query: str, max_results: int = 5) -> List[str]:
-    """Perform a DuckDuckGo search and return textual snippets with links.
+    """
+    Perform a DuckDuckGo search and return textual snippets with links.
 
     Parameters
     ----------
     query : str
         Search query.
-    max_results : int, default=5
-        Maximum number of results to fetch.
+    max_results : int, optional
+        Maximum number of results to fetch, by default 5.
 
     Returns
     -------
-    list[str]
+    List[str]
         Strings formatted as "[source:<url>] <snippet>".
     """
     results = []
@@ -355,7 +365,8 @@ def ddgs_search(query: str, max_results: int = 5) -> List[str]:
     return results
 
 def build_rag_chain(llm, retriever, web: bool = False):
-    """Create a RAG chain: retrieval -> prompt -> LLM.
+    """
+    Create a RAG chain: retrieval -> prompt -> LLM.
 
     Parameters
     ----------
@@ -363,8 +374,8 @@ def build_rag_chain(llm, retriever, web: bool = False):
         LangChain chat model instance.
     retriever : BaseRetriever
         Backend retriever to fetch context chunks.
-    web : bool, default=False
-        If True, augment internal knowledge with DuckDuckGo results.
+    web : bool, optional
+        If True, augment internal knowledge with DuckDuckGo results, by default False.
 
     Returns
     -------
@@ -427,7 +438,8 @@ def build_rag_chain(llm, retriever, web: bool = False):
     return chain
 
 def get_contexts_for_question(retriever, question: str, k: int) -> List[str]:
-    """Return the page contents of the top-k retrieved chunks.
+    """
+    Return the page contents of the top-k retrieved chunks.
 
     Parameters
     ----------
@@ -440,7 +452,7 @@ def get_contexts_for_question(retriever, question: str, k: int) -> List[str]:
 
     Returns
     -------
-    list[str]
+    List[str]
         Page contents of the retrieved chunks.
     """
     docs = retriever.invoke(question)[:k]
@@ -453,14 +465,12 @@ def build_ragas_dataset(
     k: int,
     ground_truth: dict[str, str] | None = None,
 ):
-    """Run the RAG pipeline and build a dataset compatible with Ragas.
-
-    Each row contains: question, retrieved_contexts, response, and optionally
-    reference (ground truth).
+    """
+    Run the RAG pipeline and build a dataset compatible with Ragas.
 
     Parameters
     ----------
-    questions : list[str]
+    questions : List[str]
         Questions to evaluate.
     retriever : BaseRetriever
         Retriever used to fetch contexts.
@@ -468,12 +478,12 @@ def build_ragas_dataset(
         RAG LCEL chain that generates answers.
     k : int
         Number of contexts to include in the dataset for each question.
-    ground_truth : dict[str, str] | None
+    ground_truth : dict[str, str] | None, optional
         Optional mapping from question to reference answer.
 
     Returns
     -------
-    list[dict]
+    List[dict]
         Ragas-compatible dataset rows.
     """
     dataset = []
@@ -494,7 +504,8 @@ def build_ragas_dataset(
     return dataset
 
 def rag_answer(question: str, chain) -> str:
-    """Execute the RAG chain for a single question.
+    """
+    Execute the RAG chain for a single question.
 
     Parameters
     ----------
@@ -511,18 +522,19 @@ def rag_answer(question: str, chain) -> str:
     return chain.invoke(question)
 
 def execute_rag(settings: Settings, questions: List[str]) -> List[dict]:
-    """Run the end-to-end RAG pipeline over a list of questions.
+    """
+    Run the end-to-end RAG pipeline over a list of questions.
 
     Parameters
     ----------
     settings : Settings
         Global configuration for embeddings, LLM, and retrieval.
-    questions : list[str]
+    questions : List[str]
         Questions to be answered by the RAG system.
 
     Returns
     -------
-    list[dict]
+    List[dict]
         List of {"question": str, "answer": str} pairs.
     """
     embeddings = get_embeddings(settings)
@@ -543,13 +555,14 @@ def execute_rag(settings: Settings, questions: List[str]) -> List[dict]:
     return results
 
 def evaluate_rag(settings: Settings, questions: List[str]) -> EvaluationDataset:
-    """Evaluate the RAG pipeline with Ragas metrics.
+    """
+    Evaluate the RAG pipeline with Ragas metrics.
 
     Parameters
     ----------
     settings : Settings
         Global configuration for embeddings, LLM, and retrieval.
-    questions : list[str]
+    questions : List[str]
         Questions used to build the evaluation dataset.
 
     Returns
@@ -612,11 +625,12 @@ def evaluate_rag(settings: Settings, questions: List[str]) -> EvaluationDataset:
     return df
 
 def write_answers_to_file(results: List[dict], filename: str):
-    """Write question/answer pairs to a text file.
+    """
+    Write question/answer pairs to a text file.
 
     Parameters
     ----------
-    results : list[dict]
+    results : List[dict]
         List of {"question": str, "answer": str} objects.
     filename : str
         Output file path.
@@ -634,7 +648,9 @@ def write_answers_to_file(results: List[dict], filename: str):
 
 
 def main():
-    """Entry point that runs a Ragas evaluation on predefined questions."""
+    """
+    Entry point that runs a Ragas evaluation on predefined questions.
+    """
     settings = SETTINGS
 
     # Random questions about docuements.md in data/<docs-topic> folder

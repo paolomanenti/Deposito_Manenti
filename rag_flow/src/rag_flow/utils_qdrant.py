@@ -46,9 +46,51 @@ load_dotenv(dotenv_path="C:\\Users\\PT776ZX\\OneDrive - EY\\Desktop\\Education\\
 class Settings:
     """
     Comprehensive configuration settings for the RAG pipeline.
-    
-    This class centralizes all configurable parameters, allowing easy tuning
-    of the system's behavior without modifying the core logic.
+
+    Attributes
+    ----------
+    qdrant_url : str
+        Qdrant server URL.
+    collection : str
+        Collection name for storing document chunks and vectors.
+    hf_model_name : str
+        HuggingFace sentence transformer model for generating embeddings.
+    chunk_size : int
+        Maximum number of characters per document chunk.
+    chunk_overlap : int
+        Number of characters to overlap between consecutive chunks.
+    top_n_semantic : int
+        Number of top semantic search candidates to retrieve initially.
+    top_n_text : int
+        Maximum number of text-based matches to consider for hybrid fusion.
+    final_k : int
+        Final number of results to return after all processing steps.
+    alpha : float
+        Weight for semantic similarity in hybrid score fusion.
+    text_boost : float
+        Additional score boost for results that match both semantic and text criteria.
+    use_mmr : bool
+        Whether to use MMR for result diversification and redundancy reduction.
+    mmr_lambda : float
+        MMR diversification parameter balancing relevance vs. diversity.
+    lm_base_env : str
+        Environment variable name for LLM service base URL.
+    lm_key_env : str
+        Environment variable name for LLM service API key.
+    lm_model_env : str
+        Environment variable name for the specific LLM model to use.
+    deployment_emb : str
+        Deployment name for the embedding model.
+    api_version : str
+        Azure API version.
+    endpoint : str
+        Azure API base endpoint.
+    subscription_key : str
+        Azure API subscription key.
+    model_name_chat : str
+        Name of the chat model deployed in Azure.
+    deployment_chat : str
+        Deployment name for the chat model.
     """
     
     # =========================
@@ -340,7 +382,8 @@ SETTINGS = Settings()
 # =========================
 
 def get_embeddings(settings: Settings) -> AzureOpenAIEmbeddings:
-    """Create an Azure OpenAI embeddings client.
+    """
+    Create an Azure OpenAI embeddings client.
 
     Parameters
     ----------
@@ -360,7 +403,8 @@ def get_embeddings(settings: Settings) -> AzureOpenAIEmbeddings:
     )
 
 def get_llm(settings: Settings):
-    """Initialize a chat LLM bound to Azure OpenAI.
+    """
+    Initialize a chat LLM bound to Azure OpenAI.
 
     Parameters
     ----------
@@ -399,6 +443,14 @@ def get_llm(settings: Settings):
     )
 
 def simulate_corpus() -> List[Document]:
+    """
+    Simulate a corpus of documents for testing purposes.
+
+    Returns
+    -------
+    List[Document]
+        A list of simulated documents.
+    """
 
     docs = [
         Document(
@@ -440,7 +492,8 @@ def simulate_corpus() -> List[Document]:
     return docs
 
 def load_documents_from_folder(folder_path: str) -> List[Document]:
-    """Load text and PDF files within a folder as LangChain documents.
+    """
+    Load text and PDF files within a folder as LangChain documents.
 
     Parameters
     ----------
@@ -449,7 +502,7 @@ def load_documents_from_folder(folder_path: str) -> List[Document]:
 
     Returns
     -------
-    list[Document]
+    List[Document]
         Documents with `page_content` and `source` metadata.
     """
     i = 1
@@ -474,6 +527,21 @@ def load_documents_from_folder(folder_path: str) -> List[Document]:
     return docs
 
 def split_documents(docs: List[Document], settings: Settings) -> List[Document]:
+    """
+    Split documents into smaller chunks based on the specified settings.
+
+    Parameters
+    ----------
+    docs : List[Document]
+        List of documents to split.
+    settings : Settings
+        Configuration settings for chunking.
+
+    Returns
+    -------
+    List[Document]
+        List of document chunks.
+    """
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=settings.chunk_size,
         chunk_overlap=settings.chunk_overlap,
@@ -486,67 +554,33 @@ def split_documents(docs: List[Document], settings: Settings) -> List[Document]:
 # =========================
 
 def get_qdrant_client(settings: Settings) -> QdrantClient:
+    """
+    Initialize a Qdrant client.
+
+    Parameters
+    ----------
+    settings : Settings
+        Global configuration.
+
+    Returns
+    -------
+    QdrantClient
+        Configured Qdrant client.
+    """
     return QdrantClient(url=settings.qdrant_url)
 
 def recreate_collection_for_rag(client: QdrantClient, settings: Settings, vector_size: int):
     """
     Create or recreate a Qdrant collection optimized for RAG (Retrieval-Augmented Generation).
-    
-    This function sets up a vector database collection with optimal configuration for
-    semantic search, including HNSW indexing, payload indexing, and quantization.
-    
-    Args:
-        client: Qdrant client instance for database operations
-        settings: Configuration object containing collection parameters
-        vector_size: Dimension of the embedding vectors (e.g., 384 for MiniLM-L6)
-        
-    Collection Architecture:
-    - Vector storage: Dense vectors for semantic similarity search
-    - Payload storage: Metadata and text content for retrieval
-    - Indexing: HNSW for approximate nearest neighbor search
-    - Quantization: Scalar quantization for memory optimization
-        
-    Distance Metric Selection:
-    - Cosine distance: Normalized similarity, good for semantic embeddings
-    - Alternatives: Euclidean (L2), Manhattan (L1), Dot product
-    - Cosine preferred for normalized embeddings (sentence-transformers)
-        
-    HNSW Index Configuration:
-    - m=32: Average connections per node (higher = better quality, more memory)
-    - ef_construct=256: Search depth during construction (higher = better quality, slower build)
-    - Trade-offs: Higher values improve recall but increase memory and build time
-        
-    Optimizer Configuration:
-    - default_segment_number=2: Parallel processing segments
-    - Benefits: Faster indexing, better resource utilization
-    - Considerations: More segments = more memory overhead
-        
-    Quantization Strategy:
-    - Scalar quantization: Reduces vector precision from float32 to int8
-    - Memory savings: ~4x reduction in vector storage
-    - Quality impact: Minimal impact on search accuracy
-    - always_ram=False: Vectors stored on disk, loaded to RAM as needed
-        
-    Payload Indexing Strategy:
-    - Text index: Full-text search capabilities (BM25 scoring)
-    - Keyword indices: Fast exact matching and filtering
-    - Performance: Significantly faster than unindexed field searches
-        
-    Collection Lifecycle:
-    - recreate_collection: Drops existing collection and creates new one
-    - Use case: Development/testing, major schema changes
-    - Production: Consider using create_collection + update_collection_info
-        
-    Performance Considerations:
-    - Build time: HNSW construction scales with collection size
-    - Memory usage: Vectors loaded to RAM during search
-    - Storage: Quantized vectors + payload data
-    - Query latency: HNSW provides sub-millisecond search times
-        
-    Scaling Guidelines:
-    - Small collections (<100K vectors): Current settings optimal
-    - Medium collections (100K-1M vectors): Increase m to 48-64
-    - Large collections (1M+ vectors): Consider multiple collections or sharding
+
+    Parameters
+    ----------
+    client : QdrantClient
+        Qdrant client instance for database operations.
+    settings : Settings
+        Configuration object containing collection parameters.
+    vector_size : int
+        Dimension of the embedding vectors (e.g., 384 for MiniLM-L6).
     """
     client.recreate_collection(
         collection_name=settings.collection,
@@ -583,6 +617,21 @@ def recreate_collection_for_rag(client: QdrantClient, settings: Settings, vector
 # =========================
 
 def build_points(chunks: List[Document], embeds: List[List[float]]) -> List[PointStruct]:
+    """
+    Build Qdrant points from document chunks and their embeddings.
+
+    Parameters
+    ----------
+    chunks : List[Document]
+        List of document chunks.
+    embeds : List[List[float]]
+        List of embedding vectors corresponding to the chunks.
+
+    Returns
+    -------
+    List[PointStruct]
+        List of Qdrant points.
+    """
     pts: List[PointStruct] = []
     for i, (doc, vec) in enumerate(zip(chunks, embeds), start=1):
         payload = {
@@ -597,6 +646,20 @@ def build_points(chunks: List[Document], embeds: List[List[float]]) -> List[Poin
     return pts
 
 def upsert_chunks(client: QdrantClient, settings: Settings, chunks: List[Document], embeddings: AzureOpenAIEmbeddings):
+    """
+    Upsert document chunks into the Qdrant collection.
+
+    Parameters
+    ----------
+    client : QdrantClient
+        Qdrant client instance.
+    settings : Settings
+        Configuration settings.
+    chunks : List[Document]
+        List of document chunks.
+    embeddings : AzureOpenAIEmbeddings
+        Embedding model for generating vector representations.
+    """
     vecs = embeddings.embed_documents([c.page_content for c in chunks])
     points = build_points(chunks, vecs)
     client.upsert(collection_name=settings.collection, points=points, wait=True)
@@ -613,6 +676,29 @@ def qdrant_semantic_search(
     limit: int,
     with_vectors: bool = False
 ):
+    """
+    Perform semantic search in the Qdrant collection.
+
+    Parameters
+    ----------
+    client : QdrantClient
+        Qdrant client instance.
+    settings : Settings
+        Configuration settings.
+    query : str
+        Search query.
+    embeddings : AzureOpenAIEmbeddings
+        Embedding model for generating query vectors.
+    limit : int
+        Maximum number of results to retrieve.
+    with_vectors : bool, optional
+        Whether to include vectors in the results, by default False.
+
+    Returns
+    -------
+    List[ScoredPoint]
+        List of scored points from the Qdrant collection.
+    """
     qv = embeddings.embed_query(query)
     res = client.query_points(
         collection_name=settings.collection,
@@ -634,8 +720,23 @@ def qdrant_text_prefilter_ids(
     max_hits: int
 ) -> List[int]:
     """
-    Usa l'indice full-text su 'text' per prefiltrare i punti che contengono parole chiave.
-    Non restituisce uno score BM25: otteniamo un sottoinsieme di id da usare come boost.
+    Use the full-text index on 'text' to prefilter points containing keywords.
+
+    Parameters
+    ----------
+    client : QdrantClient
+        Qdrant client instance.
+    settings : Settings
+        Configuration settings.
+    query : str
+        Search query.
+    max_hits : int
+        Maximum number of text matches to retrieve.
+
+    Returns
+    -------
+    List[int]
+        List of IDs of matching points.
     """
     # Scroll con filtro MatchText per ottenere id dei match testuali
     # (nota: scroll è paginato; qui prendiamo solo i primi max_hits per semplicità)
@@ -665,167 +766,22 @@ def mmr_select(
 ) -> List[int]:
     """
     Select diverse results using Maximal Marginal Relevance (MMR) algorithm.
-    
-    MMR balances relevance to the query with diversity among selected results,
-    reducing redundancy and improving information coverage. This is particularly
-    useful for RAG systems where diverse context provides better generation.
-    
-    Args:
-        query_vec: Query embedding vector for relevance calculation
-        candidates_vecs: List of candidate document embedding vectors
-        k: Number of results to select
-        lambda_mult: MMR parameter balancing relevance vs. diversity (0.0 to 1.0)
-        
-    Returns:
-        List[int]: Indices of selected candidates in order of selection
-        
-    MMR Algorithm Overview:
-    
-    The algorithm iteratively selects candidates that maximize the MMR score:
-    
-    MMR_score(i) = λ × Relevance(i, query) - (1-λ) × max_similarity(i, selected)
-    
-    Where:
-    - λ (lambda_mult): Weight for relevance vs. diversity
-    - Relevance(i, query): Cosine similarity between candidate i and query
-    - max_similarity(i, selected): Maximum similarity between candidate i and already selected items
-        
-    Algorithm Steps:
-    
-    1. INITIALIZATION:
-       - Calculate relevance scores for all candidates vs. query
-       - Select the highest-scoring candidate as the first result
-       - Initialize selected and remaining candidate sets
-        
-    2. ITERATIVE SELECTION:
-       - For each remaining position, calculate MMR score for all candidates
-       - MMR score balances query relevance with diversity from selected items
-       - Select candidate with highest MMR score
-       - Update selected and remaining sets
-        
-    3. TERMINATION:
-       - Continue until k candidates selected or no more candidates available
-       - Return indices in selection order
-        
-    Mathematical Foundation:
-    
-    Cosine Similarity:
-    - cos(a,b) = (a·b) / (||a|| × ||b||)
-    - Range: [-1, 1] where 1 = identical, 0 = orthogonal, -1 = opposite
-    - Normalized vectors typically have values in [0, 1] range
-        
-    MMR Score Calculation:
-    - Relevance term: λ × cos(query, candidate)
-    - Diversity term: (1-λ) × max(cos(candidate, selected_i))
-    - Higher relevance increases score, higher similarity to selected decreases score
-        
-    Lambda Parameter Behavior:
-    
-    λ = 0.0 (Pure Diversity):
-    - Only diversity matters, relevance ignored
-    - Results may be irrelevant to query
-    - Useful for exploratory search
-        
-    λ = 0.5 (Balanced):
-    - Equal weight for relevance and diversity
-    - Good compromise for general use
-    - Moderate redundancy reduction
-        
-    λ = 0.6 (Current Setting):
-    - Slight preference for relevance
-    - Good diversity while maintaining relevance
-    - Recommended for most RAG applications
-        
-    λ = 1.0 (Pure Relevance):
-    - Only relevance matters, diversity ignored
-    - Equivalent to simple top-K selection
-    - May have redundant results
-        
-    Performance Characteristics:
-    
-    Time Complexity:
-    - O(k × n) where k = results to select, n = total candidates
-    - Each iteration processes all remaining candidates
-    - Quadratic complexity in worst case (k ≈ n)
-        
-    Space Complexity:
-    - O(n) for storing vectors and similarity scores
-    - O(k) for selected indices
-    - O(n) for remaining candidate set
-        
-    Memory Usage:
-    - Vector storage: All candidate vectors loaded in memory
-    - Similarity cache: Relevance scores computed once
-    - Selection state: Small overhead for tracking
-        
-    Quality Metrics:
-    
-    Relevance Preservation:
-    - Higher lambda values preserve more relevance
-    - Lower lambda values may sacrifice relevance for diversity
-    - Optimal balance depends on use case
-        
-    Diversity Improvement:
-    - MMR significantly reduces redundancy compared to top-K
-    - Diversity increases as lambda decreases
-    - Measurable improvement in information coverage
-        
-    User Experience:
-    - Less repetitive results
-    - Better coverage of different aspects
-    - More informative context for LLM generation
-        
-    Use Case Recommendations:
-    
-    Research & Exploration:
-    - λ = 0.3-0.5: Maximize diversity for comprehensive understanding
-    - Higher k values: More diverse perspectives
-        
-    Factual Queries:
-    - λ = 0.7-0.9: Prioritize relevance for accurate information
-    - Lower k values: Focus on most relevant results
-        
-    Technical Documentation:
-    - λ = 0.5-0.7: Balance relevance with diverse technical perspectives
-    - Moderate k values: Comprehensive technical coverage
-        
-    Conversational AI:
-    - λ = 0.6-0.8: Good relevance with some diversity
-    - Higher k values: Rich context for generation
-        
-    Tuning Guidelines:
-    
-    For Maximum Diversity:
-    - Decrease lambda to 0.3-0.5
-    - Increase k to 8-12 results
-    - Monitor relevance quality
-        
-    For Maximum Relevance:
-    - Increase lambda to 0.8-1.0
-    - Decrease k to 3-6 results
-    - Accept some redundancy
-        
-    For Balanced Results:
-    - Use lambda = 0.6-0.7 (current setting)
-    - Moderate k values (6-8)
-    - Good compromise for most applications
-        
-    Implementation Notes:
-    
-    Numerical Stability:
-    - Small epsilon (1e-12) added to prevent division by zero
-    - Cosine similarity handles normalized vectors robustly
-    - Float precision sufficient for similarity calculations
-        
-    Edge Cases:
-    - Empty candidate list: Returns empty result
-    - k > candidates: Returns all candidates
-    - Single candidate: Returns that candidate regardless of lambda
-        
-    Optimization Opportunities:
-    - Vector similarity could be pre-computed and cached
-    - Parallel processing for large candidate sets
-    - Early termination for very low diversity scores
+
+    Parameters
+    ----------
+    query_vec : List[float]
+        Query embedding vector for relevance calculation.
+    candidates_vecs : List[List[float]]
+        List of candidate document embedding vectors.
+    k : int
+        Number of results to select.
+    lambda_mult : float
+        MMR parameter balancing relevance vs. diversity (0.0 to 1.0).
+
+    Returns
+    -------
+    List[int]
+        Indices of selected candidates in order of selection.
     """
     import numpy as np
     V = np.array(candidates_vecs, dtype=float)
@@ -867,129 +823,22 @@ def hybrid_search(
 ):
     """
     Perform hybrid search combining semantic similarity and text-based matching.
-    
-    This function implements a sophisticated retrieval strategy that leverages both
-    semantic understanding and traditional text search to provide high-quality,
-    relevant results with minimal redundancy.
-    
-    Args:
-        client: Qdrant client for database operations
-        settings: Configuration object containing search parameters
-        query: User's search query string
-        embeddings: Embedding model for semantic search
-        
-    Returns:
-        List[ScoredPoint]: Ranked list of relevant document chunks
-        
-    Hybrid Search Strategy Overview:
-    
-    1. SEMANTIC SEARCH (Vector Similarity):
-       - Converts query to embedding vector
-       - Performs approximate nearest neighbor search using HNSW index
-       - Retrieves top_n_semantic candidates based on cosine similarity
-       - Provides semantic understanding of query intent
-        
-    2. TEXT-BASED PREFILTERING:
-       - Uses full-text search capabilities (BM25 scoring)
-       - Identifies documents containing query keywords/phrases
-       - Creates a set of text-relevant document IDs
-       - Acts as a relevance filter for semantic results
-        
-    3. SCORE FUSION & NORMALIZATION:
-       - Normalizes semantic scores to [0,1] range for fair comparison
-       - Applies alpha weight to balance semantic vs. text relevance
-       - Adds text_boost for results matching both criteria
-       - Creates unified relevance scoring
-        
-    4. RESULT DIVERSIFICATION (Optional MMR):
-       - Applies Maximal Marginal Relevance to reduce redundancy
-       - Balances relevance with diversity using mmr_lambda parameter
-       - Selects final_k results from top candidates
-        
-    Algorithm Flow:
-    
-    Phase 1: Semantic Retrieval
-    - Query embedding generation
-    - HNSW-based vector search
-    - Score normalization for fusion
-        
-    Phase 2: Text Matching
-    - Full-text search with MatchText filter
-    - ID collection for hybrid scoring
-    - Performance optimization with pagination
-        
-    Phase 3: Score Fusion
-    - Linear combination of semantic and text scores
-    - Boost application for hybrid matches
-    - Ranking by fused scores
-        
-    Phase 4: Result Selection
-    - Top-N selection or MMR diversification
-    - Final result ordering and return
-        
-    Performance Characteristics:
-    
-    Time Complexity:
-    - Semantic search: O(log n) with HNSW index
-    - Text search: O(m) where m is text matches
-    - Score fusion: O(k) where k is semantic candidates
-    - MMR: O(k²) for diversity computation
-        
-    Memory Usage:
-    - Vector storage: Quantized vectors in memory
-    - Score storage: Temporary arrays for fusion
-    - Result storage: Final selected points
-        
-    Quality Metrics:
-    
-    Recall (Completeness):
-    - Semantic search: High recall for conceptual queries
-    - Text search: High recall for keyword queries
-    - Hybrid approach: Combines strengths of both
-        
-    Precision (Relevance):
-    - Score fusion: Balances multiple relevance signals
-    - Text boost: Rewards multi-criteria matches
-    - MMR: Reduces redundant results
-        
-    Diversity:
-    - MMR algorithm: Maximizes information coverage
-    - Lambda parameter: Controls diversity vs. relevance trade-off
-    - Result variety: Better user experience
-        
-    Tuning Guidelines:
-    
-    For High Precision:
-    - Increase alpha (0.8-0.9): Prioritize semantic similarity
-    - Increase text_boost (0.3-0.5): Reward text matches
-    - Decrease mmr_lambda (0.7-0.9): Prioritize relevance
-        
-    For High Recall:
-    - Increase top_n_semantic (50-100): More candidates
-    - Increase top_n_text (150-200): More text matches
-    - Decrease alpha (0.5-0.7): Balance search strategies
-        
-    For High Diversity:
-    - Enable MMR (use_mmr=True)
-    - Decrease mmr_lambda (0.3-0.6): Prioritize diversity
-    - Increase final_k (8-12): More diverse results
-        
-    Use Case Optimizations:
-    
-    Technical Documentation:
-    - High alpha (0.8-0.9): Semantic understanding critical
-    - High text_boost (0.3-0.4): Technical terms important
-    - MMR enabled: Diverse technical perspectives
-        
-    General Knowledge:
-    - Balanced alpha (0.6-0.8): Both strategies valuable
-    - Moderate text_boost (0.2-0.3): Balanced approach
-    - MMR enabled: Comprehensive coverage
-        
-    Factual Queries:
-    - High alpha (0.7-0.9): Semantic context important
-    - Low text_boost (0.1-0.2): Facts over style
-    - MMR optional: Precision over diversity
+
+    Parameters
+    ----------
+    client : QdrantClient
+        Qdrant client for database operations.
+    settings : Settings
+        Configuration object containing search parameters.
+    query : str
+        User's search query string.
+    embeddings : AzureOpenAIEmbeddings
+        Embedding model for semantic search.
+
+    Returns
+    -------
+    List[ScoredPoint]
+        Ranked list of relevant document chunks.
     """
     # (1) semantica
     sem = qdrant_semantic_search(
@@ -1039,6 +888,19 @@ def hybrid_search(
 # =========================
 
 def format_docs_for_ragas(points: Iterable[Any]) -> List[str]:
+    """
+    Format documents for RAGAS evaluation.
+
+    Parameters
+    ----------
+    points : Iterable[Any]
+        Points retrieved from the Qdrant collection.
+
+    Returns
+    -------
+    List[str]
+        List of formatted document texts.
+    """
     blocks = []
     for p in points:
         pay = p.payload or {}
@@ -1046,6 +908,19 @@ def format_docs_for_ragas(points: Iterable[Any]) -> List[str]:
     return blocks
 
 def format_docs_for_prompt(points: Iterable[Any]) -> str:
+    """
+    Format documents for inclusion in a prompt.
+
+    Parameters
+    ----------
+    points : Iterable[Any]
+        Points retrieved from the Qdrant collection.
+
+    Returns
+    -------
+    str
+        Formatted string of document texts with sources.
+    """
     blocks = []
     for p in points:
         pay = p.payload or {}
@@ -1054,6 +929,19 @@ def format_docs_for_prompt(points: Iterable[Any]) -> str:
     return "\n\n".join(blocks)
 
 def build_rag_chain(llm):
+    """
+    Build a RAG chain for generating answers with citations.
+
+    Parameters
+    ----------
+    llm : BaseChatModel
+        Language model instance.
+
+    Returns
+    -------
+    Runnable
+        Configured RAG chain.
+    """
     system_prompt = (
         "Sei un assistente tecnico. Rispondi in italiano, conciso e accurato. "
         "Usa ESCLUSIVAMENTE le informazioni presenti nel CONTENUTO. "
@@ -1090,123 +978,9 @@ def build_rag_chain(llm):
 def main():
     """
     Main execution function demonstrating the complete RAG pipeline.
-    
+
     This function orchestrates the entire RAG workflow from document ingestion
-    to intelligent question answering, showcasing the system's capabilities
-    and providing a template for production deployment.
-    
-    Pipeline Overview:
-    
-    1. SYSTEM INITIALIZATION:
-       - Load configuration settings
-       - Initialize embedding model
-       - Configure LLM (optional)
-       - Establish database connection
-        
-    2. DOCUMENT PROCESSING:
-       - Load or simulate document corpus
-       - Split documents into manageable chunks
-       - Generate vector embeddings for each chunk
-        
-    3. VECTOR DATABASE SETUP:
-       - Create/configure Qdrant collection
-       - Set up HNSW indexing and payload indices
-       - Optimize for semantic search performance
-        
-    4. DATA INGESTION:
-       - Store document chunks with metadata
-       - Index vectors for fast retrieval
-       - Ensure data consistency and availability
-        
-    5. INTELLIGENT RETRIEVAL:
-       - Process user queries through hybrid search
-       - Combine semantic and text-based matching
-       - Apply MMR for result diversification
-        
-    6. CONTENT GENERATION:
-       - Use LLM for intelligent answer generation
-       - Fall back to content display if LLM unavailable
-       - Provide source citations and context
-        
-    Performance Characteristics:
-    
-    Initialization Time:
-    - Embedding model: 2-10 seconds (depends on model size)
-    - LLM connection: 0.1-5 seconds (depends on service)
-    - Database setup: 1-5 seconds (depends on collection size)
-        
-    Processing Time:
-    - Document chunking: Linear with document count
-    - Vector generation: Linear with chunk count
-    - Database indexing: O(n log n) with HNSW construction
-        
-    Query Time:
-    - Semantic search: Sub-millisecond with HNSW
-    - Text search: Millisecond range with payload indices
-    - Result fusion: Linear with candidate count
-    - MMR diversification: Quadratic with candidate count
-        
-    Memory Usage:
-    - Embedding model: 100MB-2GB (depends on model)
-    - Vector storage: 4 bytes × dimensions × chunks (quantized)
-    - Payload storage: Variable based on metadata size
-    - LLM context: Depends on model and input size
-        
-    Scalability Considerations:
-    
-    Document Volume:
-    - Small (<1K docs): Current settings optimal
-    - Medium (1K-100K docs): Consider batch processing
-    - Large (100K+ docs): Implement streaming ingestion
-        
-    Vector Dimensions:
-    - 384 dimensions: Fast, memory-efficient, good quality
-    - 768 dimensions: Higher quality, more memory, slower
-    - 1024+ dimensions: Maximum quality, significant overhead
-        
-    Collection Management:
-    - Single collection: Simple, good for small-medium datasets
-    - Multiple collections: Better for large, diverse datasets
-    - Sharding: Consider for very large datasets (>1M vectors)
-        
-    Error Handling Strategy:
-    
-    Graceful Degradation:
-    - LLM failures: Fall back to content display
-    - Database errors: Informative error messages
-    - Network issues: Retry logic for transient failures
-        
-    Resource Management:
-    - Memory monitoring: Prevent OOM conditions
-    - Connection pooling: Efficient database usage
-    - Cleanup: Proper resource deallocation
-        
-    Monitoring & Logging:
-    - Performance metrics: Track response times
-    - Error rates: Monitor system health
-    - Usage patterns: Understand user behavior
-        
-    Production Deployment Considerations:
-    
-    Environment Configuration:
-    - Use environment variables for sensitive data
-    - Separate configs for dev/staging/production
-    - Implement proper logging and monitoring
-        
-    Security:
-    - API key management: Secure storage and rotation
-    - Network security: HTTPS, firewall rules
-    - Access control: User authentication and authorization
-        
-    Performance Optimization:
-    - Caching: Redis for frequently accessed data
-    - Load balancing: Distribute requests across instances
-    - CDN: Static content delivery optimization
-        
-    Maintenance:
-    - Regular backups: Database and configuration
-    - Model updates: Periodic embedding model refresh
-    - Performance tuning: Monitor and adjust parameters
+    to intelligent question answering.
     """
     s = SETTINGS
     embeddings = get_embeddings(s)
